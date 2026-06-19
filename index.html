@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CACAO/FP — Cocoa FP&amp;A Terminal</title>
+  <meta name="description" content="Cocoa Procurement FP&A terminal — market data, hedge accounting, PPV, EUDR, close." />
+
+  <!-- Fonts: Inter (UI) + JetBrains Mono (numerics) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Chart.js 4.4.1 — vendored locally (no CDN/SRI fragility; corporate-proxy & offline safe) -->
+  <script src="vendor/chart.umd.min.js"></script>
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- ===================== TOPBAR ===================== -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">CACAO<span class="brand-slash">/</span>FP</span>
+      <span class="brand-sub">Cocoa FP&amp;A Terminal</span>
+    </div>
+
+    <!-- ticker strip — populated by app.js from DATA.ticker -->
+    <div class="ticker-strip" id="ticker-strip"></div>
+
+    <div class="topbar-right">
+      <div class="session-clock" id="session-clock">
+        <span class="clock-time" id="clock-time">--:--:--</span>
+        <span class="clock-zone">CET · SwissCo</span>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn btn-ghost" data-action="refresh" title="Sync data">⟳ Sync</button>
+        <button class="btn btn-ghost" data-action="export-excel" title="Export">↗ Export</button>
+        <button class="btn btn-primary" data-action="run-forecast">Run Forecast</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===================== FILTER BAR ===================== -->
+  <!-- populated by views2.js (renderFilterBar) -->
+  <div class="filter-bar" id="filter-bar"></div>
+
+  <!-- ===================== SHELL ===================== -->
+  <div class="shell">
+
+    <!-- side navigation (static) -->
+    <nav class="sidenav" id="sidenav">
+      <div class="nav-section">
+        <div class="nav-label">Workspace</div>
+        <a class="nav-item active" data-view="dashboard"><span class="nav-ico">▦</span><span class="nav-text">Dashboard</span></a>
+        <a class="nav-item" data-view="market"><span class="nav-ico">◰</span><span class="nav-text">Market Desk</span></a>
+        <a class="nav-item" data-view="contracts"><span class="nav-ico">▤</span><span class="nav-text">Physical Contracts</span></a>
+        <a class="nav-item" data-view="ppv"><span class="nav-ico">Δ</span><span class="nav-text">PPV Analysis</span></a>
+        <a class="nav-item" data-view="hedge"><span class="nav-ico">⇄</span><span class="nav-text">Hedge Book</span></a>
+        <a class="nav-item" data-view="inventory"><span class="nav-ico">▥</span><span class="nav-text">Inventory Valuation</span></a>
+        <a class="nav-item" data-view="forecast"><span class="nav-ico">◷</span><span class="nav-text">Forecast &amp; Planning</span></a>
+        <a class="nav-item" data-view="close"><span class="nav-ico">✓</span><span class="nav-text">Month-End Close</span></a>
+        <a class="nav-item" data-view="sox"><span class="nav-ico">⚖</span><span class="nav-text">SOX &amp; Controls</span></a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-label">Advanced</div>
+        <a class="nav-item" data-view="whatif"><span class="nav-ico">⚙</span><span class="nav-text">What-If Calculator</span></a>
+        <a class="nav-item" data-view="eudr"><span class="nav-ico">◉</span><span class="nav-text">EUDR &amp; Traceability</span></a>
+        <a class="nav-item" data-view="cashflow"><span class="nav-ico">$</span><span class="nav-text">Cash Flow / Treasury</span></a>
+        <a class="nav-item" data-view="versions"><span class="nav-ico">⑂</span><span class="nav-text">Forecast Versions</span></a>
+        <a class="nav-item" data-view="effectiveness"><span class="nav-ico">∿</span><span class="nav-text">Hedge Effectiveness</span></a>
+        <a class="nav-item" data-view="investigator"><span class="nav-ico">⌕</span><span class="nav-text">Variance Investigator</span></a>
+        <a class="nav-item" data-view="exports"><span class="nav-ico">↗</span><span class="nav-text">Exports &amp; Mobile</span></a>
+      </div>
+      <div class="nav-foot">
+        <div class="nav-foot-row"><span class="dot dot-pos"></span> S/4HANA · connected</div>
+        <div class="nav-foot-row"><span class="dot dot-pos"></span> iRely CTRM · connected</div>
+        <div class="nav-foot-row"><span class="dot dot-warn"></span> Power BI · refresh 06:00</div>
+      </div>
+    </nav>
+
+    <!-- view render target -->
+    <main class="canvas" id="canvas"></main>
+  </div>
+
+  <!-- ===================== ACTIVITY RAIL + FAB ===================== -->
+  <button class="fab" id="fab" data-action="toggle-rail" title="Activity">
+    <span class="fab-ico">◧</span>
+    <span class="fab-badge" id="fab-badge">9</span>
+  </button>
+  <aside class="activity-rail" id="activity-rail"></aside>
+
+  <!-- ===================== OVERLAYS ===================== -->
+  <div class="toast-stack" id="toast-stack"></div>
+  <div class="modal-root" id="modal-root"></div>
+  <div class="drawer-root" id="drawer-root"></div>
+
+  <!-- ===================== SCRIPTS (deterministic load order) ===================== -->
+  <script src="data.js"></script>      <!-- DATA = { core datasets } -->
+  <script src="data2.js"></script>     <!-- extends DATA with v2 datasets -->
+
+  <!-- localStorage schema versioning / migration (runs before app.js loadFilters) -->
+  <script>
+  (function migrateStore(){
+    const SCHEMA_VERSION = '2';                 // bump when filter keys/taxonomy change
+    const VKEY = 'cacao_schema_v', FKEY = 'cacao_filters_v1';
+    try {
+      if (localStorage.getItem(VKEY) === SCHEMA_VERSION) return;
+      const tax = (window.DATA && DATA.filterTaxonomy) || {};
+      const allowed = { period: tax.periods, origin: tax.origins, supplier: tax.suppliers,
+                        sku: tax.skus, currency: tax.currencies, version: tax.versions };
+      const raw = JSON.parse(localStorage.getItem(FKEY) || '{}');
+      let changed = false;
+      for (const k of Object.keys(raw)) {
+        const list = allowed[k];
+        if (!list) { delete raw[k]; changed = true; continue; }     // unknown key → drop
+        if (list.length && !list.includes(raw[k])) { delete raw[k]; changed = true; } // stale value → drop (loadFilters re-defaults)
+      }
+      if (changed) localStorage.setItem(FKEY, JSON.stringify(raw));
+      localStorage.setItem(VKEY, SCHEMA_VERSION);
+    } catch (e) { /* corrupt store → leave for loadFilters to default */ }
+  })();
+  </script>
+
+  <script src="app.js"></script>       <!-- helpers, VIEWS registry, switchView, 9 core views -->
+  <script src="views2.js"></script>    <!-- 7 advanced views, filter bar, activity rail, PPV commentary -->
+  <script src="actions.js?v=2"></script>   <!-- dispatcher, toast, modal, 13 drill drawers; boots the app -->
+
+  <!-- vendored export libraries (local; loaded before enhancement modules that use them) -->
+  <script src="vendor/xlsx.full.min.js"></script>                <!-- global: XLSX -->
+  <script src="vendor/jspdf.umd.min.js"></script>               <!-- global: jspdf.jsPDF -->
+  <script src="vendor/jspdf.plugin.autotable.min.js"></script>  <!-- jsPDF autoTable plugin -->
+  <script src="vendor/pptxgen.bundle.js"></script>             <!-- global: PptxGenJS -->
+
+  <!-- ENHANCEMENT MODULES (self-installing via VIEWS-render patch / #canvas observer / ACTIONS reassignment) -->
+  <script src="enh-saved-views.js"></script>   <!-- #15 Saved Views / filter presets -->
+  <script src="enh-tables.js"></script>        <!-- #16 sort/search/sticky tables + sparklines -->
+  <script src="enh-exports.js"></script>       <!-- #27 real xlsx / pdf / pptx exports -->
+  <script src="enh-brief.js"></script>         <!-- #29 Morning Brief + alerts inbox -->
+
+  <!-- ENHANCEMENT MODULES — second wave -->
+  <script src="enh-ppv-bridge.js"></script>    <!-- #1  five-way PPV attribution bridge -->
+  <script src="enh-var-mc.js"></script>        <!-- #7  Monte-Carlo VaR / Expected Shortfall -->
+  <script src="enh-ptbf.js"></script>          <!-- #11 PTBF price-fixing cockpit -->
+  <script src="enh-cmdk.js"></script>          <!-- #13 Cmd-K command palette -->
+  <script src="enh-crossfilter.js"></script>   <!-- #17 cross-filter by clicking charts -->
+
+  <!-- ENHANCEMENT MODULES — third wave (close-week FP&A) -->
+  <script src="enh-forecast-suite.js"></script><!-- #4 driver forecast + #5 BvA bridge + #2 std-cost roll-forward -->
+  <script src="enh-accruals-je.js"></script>   <!-- #6  accruals worksheet + journal-entry generator -->
+  <script src="enh-anomaly.js"></script>       <!-- #26 statistical anomaly detection on PPV -->
+  <script src="enh-print.js"></script>         <!-- #22 print / board-pack stylesheet -->
+
+  <!-- ENHANCEMENT MODULES — fourth wave (commodity risk + manufacturing cost) -->
+  <script src="enh-market-analytics.js"></script><!-- #8 curve/roll-yield + #9 basis & differential tracker -->
+  <script src="enh-hedge-optimizer.js"></script> <!-- #10 hedge-ratio optimizer + position-limit/greeks monitor -->
+  <script src="enh-eudr-board.js"></script>      <!-- #12 EUDR DDS workflow board + €-at-risk -->
+  <script src="enh-press-economics.js"></script> <!-- #3  bean→product grind/press economics -->
+
+  <!-- ENHANCEMENT MODULES — fifth wave (AI + platform polish) -->
+  <script src="enh-theme.js"></script>         <!-- #18 light theme + density toggle -->
+  <script src="enh-a11y.js"></script>          <!-- #20 accessibility: focus-trap dialogs + keyboard nav -->
+  <script src="enh-feedback.js"></script>      <!-- #21 loading/empty/error states + drill breadcrumb -->
+  <script src="enh-personal.js"></script>      <!-- #30 copy-to-clipboard + annotations + audit log -->
+  <script src="enh-ai.js"></script>            <!-- #24 BYO-key LLM commentary + #25 Ask-the-Desk Q&A -->
+
+  <script src="enh-routing.js"></script>       <!-- #14 URL deep-link routing (LAST: restores deep-links) -->
+</body>
+</html>
