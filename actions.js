@@ -123,6 +123,13 @@ function _aInput(value, type, placeholder) {
     (placeholder ? ' placeholder="' + _aEsc(placeholder) + '"' : '') + ' />';
 }
 
+/* A text/number input carrying an id (so a handler can read its value). */
+function _aInputId(id, value, type, placeholder) {
+  return '<input class="form-input" id="' + _aEsc(id) + '" type="' + (type || 'text') + '"' +
+    (value != null ? ' value="' + _aEsc(value) + '"' : '') +
+    (placeholder ? ' placeholder="' + _aEsc(placeholder) + '"' : '') + ' />';
+}
+
 /* A checkbox row (label + checkbox) for forms. */
 function _aCheck(label, checked) {
   return '<div class="form-row"><label class="form-label">' +
@@ -387,6 +394,37 @@ function closeDrawer() {
 }
 
 /* ---------------------------------------------------------------------------
+   INLINE DETAIL — render an entity drill-down IN the main canvas (a detail page
+   with a Back button) instead of a slide-in drawer. Used by all 13+ drill
+   factories so detail views change the current page rather than popping up.
+   --------------------------------------------------------------------------- */
+let _detailReturnView = 'dashboard';
+
+function openDetail({ title = '', sub = '', body = '' } = {}) {
+  const canvas = $('#canvas');
+  if (!canvas) return;
+  // Capture where to return to — but only when we're NOT already viewing a
+  // detail (so chained drill→drill still returns to the originating view).
+  if (!canvas.querySelector('.detail-head')) {
+    _detailReturnView = (typeof CURRENT_VIEW !== 'undefined') ? CURRENT_VIEW : 'dashboard';
+  }
+  if (typeof destroyCharts === 'function') destroyCharts();
+  if (typeof closeDrawer === 'function') closeDrawer();   // close any stray drawer
+  canvas.innerHTML =
+    '<div class="view-head detail-head">' +
+      '<div class="detail-head-main">' +
+        '<button class="btn btn-ghost btn-sm detail-back" data-action="detail-back">‹ Back</button>' +
+        '<div>' +
+          '<div class="view-title">' + _aEsc(title) + '</div>' +
+          (sub ? '<div class="view-sub">' + _aEsc(sub) + '</div>' : '') +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="card detail-card"><div class="card-body detail-body">' + body + '</div></div>';
+  canvas.scrollTop = 0;
+}
+
+/* ---------------------------------------------------------------------------
    Shared EXPORT modal — used by export-pbi / export-excel / export-pdf /
    export-pptx and the chrome export buttons.
    --------------------------------------------------------------------------- */
@@ -523,6 +561,7 @@ const ACTIONS = {
   /* ---- close / nav helpers ----------------------------------------- */
   'close-modal': () => closeModal(),
   'close-drawer': () => closeDrawer(),
+  'detail-back': () => switchView(_detailReturnView || 'dashboard'),
   'toggle-rail': () => { const r = $('#activity-rail'); if (r) r.classList.toggle('open'); },
 
   /* ---- rich modals -------------------------------------------------- */
@@ -583,12 +622,12 @@ function modalRunForecast() {
   const v = (DATA.whatIf && DATA.whatIf.baseline) || {};
   const versions = (DATA.filterTaxonomy && DATA.filterTaxonomy.versions) || ['v5 · June Rolling (CURRENT)'];
   const body = '<div class="form-grid">' +
-    _aFormRow('ICE NY (USD/t)', _aInput(v.nyPx != null ? v.nyPx : 7842, 'number')) +
-    _aFormRow('ICE LDN (GBP/t)', _aInput(v.ldnPx != null ? v.ldnPx : 5418, 'number')) +
-    _aFormRow('EUR/USD', _aInput(v.eurusd != null ? v.eurusd : 1.085, 'number')) +
-    _aFormRow('CIV differential ($/t)', _aInput(v.civDiff != null ? v.civDiff : 240, 'number')) +
-    _aFormRow('Monthly volume (MT)', _aInput(v.volume != null ? v.volume : 6400, 'number')) +
-    _aFormRow('Save as version', _aSelect(['New rolling version', ...versions])) +
+    _aFormRow('ICE NY (USD/t)', _aInputId('rf-ny', v.nyPx != null ? v.nyPx : 7842, 'number')) +
+    _aFormRow('ICE LDN (GBP/t)', _aInputId('rf-ldn', v.ldnPx != null ? v.ldnPx : 5418, 'number')) +
+    _aFormRow('EUR/USD', _aInputId('rf-fx', v.eurusd != null ? v.eurusd : 1.085, 'number')) +
+    _aFormRow('CIV differential ($/t)', _aInputId('rf-civ', v.civDiff != null ? v.civDiff : 240, 'number')) +
+    _aFormRow('Monthly volume (MT)', _aInputId('rf-vol', v.volume != null ? v.volume : 6400, 'number')) +
+    _aFormRow('Save as version', _aSelectId('rf-version', ['New rolling version', ...versions])) +
     '</div>';
   modal({
     title: 'Run Forecast',
@@ -1241,7 +1280,7 @@ function drillKpi(key) {
       { cls: 'info', body: 'May actual recorded', time: '−1mo' },
       { cls: 'muted', body: 'Budget baseline set', time: 'FY27' },
     ]).replace('<div class="timeline">', '<div class="section-title">History</div><div class="timeline">');
-  openDrawer({
+  openDetail({
     title: k.label,
     sub: 'KPI drill · June 2026 MTD',
     body: body + _aQuickActions([
@@ -1278,7 +1317,7 @@ function drillOrigin(code) {
       { cls: 'info', body: 'FOB shipment booked', time: '+14d' },
       { cls: 'warn', body: 'In-transit to EU plant', time: '+30d' },
     ]);
-  openDrawer({
+  openDetail({
     title: o.name,
     sub: 'Origin spend drill · ' + o.code,
     body: body + _aQuickActions([
@@ -1316,7 +1355,7 @@ function drillSupplier(name) {
       { cls: 'info', body: 'Last on-site audit', time: s.lastAudit },
       { cls: s.geoPct >= 75 ? 'pos' : 'warn', body: 'Geo coverage ' + s.geoPct + '%', time: 'latest' },
     ]);
-  openDrawer({
+  openDetail({
     title: s.supplier,
     sub: 'Supplier drill · ' + s.origin,
     body: body + _aQuickActions([
@@ -1376,7 +1415,7 @@ function drillSku(sku) {
       { cls: 'info', body: 'May variance recorded', time: '−1mo' },
       { cls: 'muted', body: 'Standard cost set (annual)', time: 'FY27' },
     ]);
-  openDrawer({
+  openDetail({
     title: label,
     sub: 'SKU drill · ' + sub,
     body: body + _aQuickActions([
@@ -1409,7 +1448,7 @@ function drillAlert(index) {
       { cls: 'info', body: 'Routed to desk feed', time: a.time },
       { cls: 'muted', body: 'Awaiting acknowledgement', time: '—' },
     ]);
-  openDrawer({
+  openDetail({
     title: a.title,
     sub: a.sev.toUpperCase() + ' · ' + a.time,
     body: body + _aQuickActions([
@@ -1446,7 +1485,7 @@ function drillControl(id) {
       { cls: 'pos', body: 'Prior test passed', time: 'prev cycle' },
       { cls: 'info', body: 'Control documented', time: 'baseline' },
     ]);
-  openDrawer({
+  openDetail({
     title: c.id + ' · ' + c.name,
     sub: 'SOX control drill',
     body: body + _aQuickActions([
@@ -1484,7 +1523,7 @@ function drillLot(lot) {
       { cls: 'info', body: 'Lot aggregated at port', time: 'port' },
       { cls: 'info', body: 'Linked to EU import shipment', time: 'EU' },
     ]);
-  openDrawer({
+  openDetail({
     title: l.lot,
     sub: 'Chain of custody · ' + l.supplier,
     body: body + _aQuickActions([
@@ -1520,7 +1559,7 @@ function drillTask(index) {
       { cls: _aStatusClass(t.status), body: 'Current: ' + String(t.status).replace('_', ' '), time: t.due },
       { cls: 'info', body: t.notes, time: 'note' },
     ]);
-  openDrawer({
+  openDetail({
     title: t.task,
     sub: 'Close task · ' + t.owner,
     body: body + _aQuickActions([
@@ -1556,7 +1595,7 @@ function drillMarginCall(index) {
       { cls: 'warn', body: 'Margin call issued: ' + m.reason, time: m.date },
       { cls: _aStatusClass(m.status), body: 'Status: ' + m.status, time: m.date },
     ]);
-  openDrawer({
+  openDetail({
     title: m.broker + ' margin call',
     sub: '€' + _aInt(m.amountK) + 'k · ' + m.date,
     body: body + _aQuickActions([
@@ -1589,7 +1628,7 @@ function drillActivity(index) {
     ]) +
     '<div class="section-title">Message</div>' +
     '<div class="news-body">' + _aEsc(a.body) + '</div>';
-  openDrawer({
+  openDetail({
     title: a.user + ' · ' + a.target,
     sub: a.action + ' · ' + a.time,
     body: body + _aQuickActions([
@@ -1626,7 +1665,7 @@ function drillRecon(index) {
       { cls: 'info', body: 'iRely balance loaded', time: 'WD+1' },
       { cls: _aStatusClass(r.status), body: 'Match result: ' + r.status, time: 'WD+1' },
     ]);
-  openDrawer({
+  openDetail({
     title: r.account,
     sub: 'S/4 ↔ iRely recon',
     body: body + _aQuickActions([
@@ -1664,7 +1703,7 @@ function drillJe(index) {
       { cls: 'info', body: 'JE drafted by ' + j.owner, time: 'WD+1' },
       { cls: _aStatusClass(j.status), body: 'Status: ' + j.status, time: 'WD+1' },
     ]);
-  openDrawer({
+  openDetail({
     title: j.je,
     sub: j.desc,
     body: body + _aQuickActions([
@@ -1703,7 +1742,7 @@ function drillDriver(label) {
       { cls: adverse ? 'neg' : 'pos', body: label + ' contributed ' + (totalK >= 0 ? '+' : '−') + '€' + Math.abs(totalK) + 'k', time: 'MTD' },
       { cls: 'info', body: 'Rolled into landed cost bridge', time: 'bridge' },
     ]);
-  openDrawer({
+  openDetail({
     title: label || 'Variance driver',
     sub: 'PPV bridge driver',
     body: body + _aQuickActions([
@@ -1740,7 +1779,7 @@ function drillVersion(id) {
       { cls: 'info', body: 'Owned by ' + v.owner, time: v.date },
       { cls: 'muted', body: 'Landed ' + _aEur(v.landed) + '/t · PPV €' + v.ppvM.toFixed(2) + 'M', time: 'snapshot' },
     ]);
-  openDrawer({
+  openDetail({
     title: v.id + ' · ' + v.name,
     sub: 'Forecast version · ' + v.status,
     body: body + _aQuickActions([

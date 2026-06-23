@@ -1835,3 +1835,12 @@ a {
 }
 .form-row-stack { display: block; }
 .form-row-stack .form-label { display: block; margin-bottom: 6px; }
+
+/* ===========================================================================
+   Inline detail pages (drill-downs render in the canvas, not as popups)
+   =========================================================================== */
+.detail-head-main { display: flex; align-items: center; gap: 12px; }
+.detail-back { flex: 0 0 auto; }
+.detail-back:hover { border-color: var(--accent); color: var(--accent); }
+.detail-card { margin-top: 2px; }
+.detail-body .qstat-grid { margin-bottom: 6px; }
