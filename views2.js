@@ -767,7 +767,19 @@ VIEWS.investigator = {
       '<div class="card-body">' + notes + '</div></div>' +
       '<div class="card"><div class="card-head"><div class="card-title">Related Tasks</div></div>' +
       '<div class="card-body">' + tasks + '</div></div>' +
-      '</div>'
+      '</div>' +
+      // Comments & Activity — the live, persisted reply/assign/escalate thread
+      '<div class="card"><div class="card-head">' +
+      '<div><div class="card-title">Comments &amp; Activity</div>' +
+      '<div class="card-sub">Full reply / assignment / escalation history</div></div>' +
+      '<div class="card-actions">' +
+      '<button class="btn btn-sm" data-action="add-comment">＋ Reply</button>' +
+      '<button class="btn btn-sm" data-action="tag-reviewer">@ Assign</button>' +
+      '<button class="btn btn-sm btn-danger" data-action="escalate">Escalate</button>' +
+      '</div></div>' +
+      '<div class="card-body">' +
+      ((typeof _aThreadHtml === 'function') ? _aThreadHtml() : '<div class="muted">Thread unavailable.</div>') +
+      '</div></div>'
     );
   },
 };

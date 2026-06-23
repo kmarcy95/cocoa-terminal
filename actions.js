@@ -139,6 +139,174 @@ function _aFooterCancelPrimary(primaryLabel, primaryAction, primaryPayload) {
     '>' + _aEsc(primaryLabel) + '</button>';
 }
 
+/* A select control carrying an id (so a handler can read its value). */
+function _aSelectId(id, opts, selected) {
+  return '<select class="form-input" id="' + _aEsc(id) + '">' + opts.map(function (o) {
+    const val = (typeof o === 'object') ? o.value : o;
+    const lab = (typeof o === 'object') ? o.label : o;
+    const sel = (selected != null && String(selected) === String(val)) ? ' selected' : '';
+    return '<option value="' + _aEsc(val) + '"' + sel + '>' + _aEsc(lab) + '</option>';
+  }).join('') + '</select>';
+}
+
+/* A multi-line textarea carrying an id, for readable long comments. */
+function _aTextareaId(id, value, placeholder, rows) {
+  return '<textarea class="form-input form-textarea" id="' + _aEsc(id) + '" rows="' + (rows || 5) + '"' +
+    (placeholder ? ' placeholder="' + _aEsc(placeholder) + '"' : '') + '>' +
+    _aEsc(value || '') + '</textarea>';
+}
+
+/* ---------------------------------------------------------------------------
+   INVESTIGATION COMMENT THREAD — persisted reply / assign / escalate history
+   --------------------------------------------------------------------------- */
+const INV_THREAD_KEY = 'cacao_investigation_thread_v1';
+
+function _aSeedThread() {
+  const seed = [
+    { id: 'c1', type: 'comment', author: 'Sophie Klein', avatar: 'SK', team: 'FP&A', severity: 'Watch',
+      text: 'Butter PPV looks like the press-yield issue from May. Can you confirm actual vs standard yield before we post the variance?',
+      time: '2026-06-18T09:12:00' },
+    { id: 'c2', type: 'comment', author: 'You', avatar: 'KM', team: 'FP&A', severity: 'Info',
+      text: 'Confirmed — actual yield ran 1.4 pts below standard on the Hamburg butter line, lifting cost to €15,240/t vs €14,850 std (+€390/t across 540 MT). The CIV feedstock (PC-2401) was 80% hedged via HG-7001, so the futures leg is neutral. This is a genuine physical conversion-yield variance, not a price effect — posting to 8410xx.',
+      time: '2026-06-18T09:31:00' },
+    { id: 'c3', type: 'assignment', author: 'You', avatar: 'KM', team: 'FP&A', reviewer: 'Operations', priority: 'High',
+      text: 'Assigned an engineering review of the Hamburg press line to Operations to investigate the yield drop at source before the July run.',
+      time: '2026-06-18T09:34:00' },
+    { id: 'c4', type: 'comment', author: 'Anja Brunner', avatar: 'AB', team: 'Accounting', severity: 'Info',
+      text: 'JE-44102 posted and reconciled against the S/4 ledger. Trail is clean from SKU → contract → PO → invoice → BL → hedge → JE.',
+      time: '2026-06-18T10:02:00' },
+  ];
+  try { localStorage.setItem(INV_THREAD_KEY, JSON.stringify(seed)); } catch (_e) { /* ignore */ }
+  return seed;
+}
+
+function _aLoadThread() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(INV_THREAD_KEY) || 'null');
+    if (Array.isArray(raw)) return raw;
+  } catch (_e) { /* fall through to seed */ }
+  return _aSeedThread();
+}
+
+function _aSaveThread(list) {
+  try { localStorage.setItem(INV_THREAD_KEY, JSON.stringify(list)); } catch (_e) { /* ignore */ }
+}
+
+function _aAddThreadEntry(entry) {
+  const list = _aLoadThread();
+  list.push(entry);
+  _aSaveThread(list);
+  return list;
+}
+
+/* Relative timestamp from an ISO string (browser runtime — Date is fine). */
+function _aRelTime(iso) {
+  try {
+    const then = new Date(iso).getTime();
+    if (isNaN(then)) return '';
+    const m = Math.round((Date.now() - then) / 60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return m + 'm ago';
+    const h = Math.round(m / 60);
+    if (h < 24) return h + 'h ago';
+    const d = Math.round(h / 24);
+    if (d < 7) return d + 'd ago';
+    return new Date(iso).toISOString().slice(0, 10);
+  } catch (_e) { return ''; }
+}
+
+/* Render the full conversation thread (used in modals AND the Investigator view).
+   Class .inv-thread lets _aRefreshThread() keep every visible copy in sync. */
+function _aThreadHtml() {
+  const list = _aLoadThread();
+  const TYPE = {
+    comment:    { label: 'Comment',    cls: 'badge-info' },
+    assignment: { label: 'Assignment', cls: 'badge-warn' },
+    escalation: { label: 'Escalation', cls: 'badge-neg'  },
+  };
+  const items = list.map(function (e) {
+    const t = TYPE[e.type] || TYPE.comment;
+    const sev = e.severity ? '<span class="badge badge-muted">' + _aEsc(e.severity) + '</span>' : '';
+    let extra = '';
+    if (e.type === 'assignment' && e.reviewer) {
+      extra = '<span class="thread-tag">→ ' + _aEsc(e.reviewer) + (e.priority ? ' · ' + _aEsc(e.priority) : '') + '</span>';
+    } else if (e.type === 'escalation' && e.target) {
+      extra = '<span class="thread-tag">→ ' + _aEsc(e.target) + (e.reason ? ' · ' + _aEsc(e.reason) : '') + '</span>';
+    }
+    const avatar = e.avatar || (e.author || '?').slice(0, 2).toUpperCase();
+    return '<div class="thread-item">' +
+      '<div class="thread-avatar">' + _aEsc(avatar) + '</div>' +
+      '<div class="thread-main">' +
+        '<div class="thread-meta">' +
+          '<span class="thread-author">' + _aEsc(e.author || 'Unknown') + '</span>' +
+          (e.team ? '<span class="thread-team">' + _aEsc(e.team) + '</span>' : '') +
+          '<span class="badge ' + t.cls + '">' + t.label + '</span>' + sev + extra +
+          '<span class="thread-time">' + _aEsc(_aRelTime(e.time)) + '</span>' +
+        '</div>' +
+        '<div class="thread-body">' + _aEsc(e.text || '') + '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+  const empty = '<div class="thread-empty">No activity yet — start the conversation below.</div>';
+  return '<div class="thread inv-thread">' + (list.length ? items : empty) + '</div>';
+}
+
+/* Re-render every visible thread (modal + Investigator view) and scroll to newest. */
+function _aRefreshThread() {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = _aThreadHtml();
+  const freshInner = (tmp.querySelector('.inv-thread') || {}).innerHTML || '';
+  document.querySelectorAll('.inv-thread').forEach(function (el) {
+    el.innerHTML = freshInner;
+    el.scrollTop = el.scrollHeight;
+  });
+}
+
+function _aScrollThread() {
+  document.querySelectorAll('.inv-thread').forEach(function (el) { el.scrollTop = el.scrollHeight; });
+}
+
+/* ---- post handlers: append to the thread, refresh in place, keep modal open -- */
+function _aPostComment() {
+  const ta = document.getElementById('cmt-text');
+  const text = ta ? ta.value.trim() : '';
+  if (!text) { toast({ type: 'warn', title: 'Nothing to post', body: 'Type a comment first.' }); if (ta) ta.focus(); return; }
+  const severity = (document.getElementById('cmt-sev') || {}).value || 'Info';
+  const notify = (document.getElementById('cmt-notify') || {}).value || '';
+  _aAddThreadEntry({ id: 'c' + Date.now(), type: 'comment', author: 'You', avatar: 'KM', team: 'FP&A',
+    severity: severity, notify: notify, text: text, time: new Date().toISOString() });
+  _aRefreshThread();
+  if (ta) { ta.value = ''; ta.focus(); }
+  toast({ type: 'success', title: 'Comment posted', body: notify ? 'Notified ' + notify + '.' : 'Added to the trail.' });
+}
+
+function _aPostAssignment() {
+  const reviewer = (document.getElementById('asg-reviewer') || {}).value || 'Reviewer';
+  const priority = (document.getElementById('asg-priority') || {}).value || 'Normal';
+  const due = (document.getElementById('asg-due') || {}).value || '';
+  const ta = document.getElementById('asg-note');
+  const note = ta ? ta.value.trim() : '';
+  const text = note || ('Assigned this variance to ' + reviewer + ' for review' + (due ? ', due ' + due : '') + '.');
+  _aAddThreadEntry({ id: 'c' + Date.now(), type: 'assignment', author: 'You', avatar: 'KM', team: 'FP&A',
+    reviewer: reviewer, priority: priority, due: due, text: text, time: new Date().toISOString() });
+  _aRefreshThread();
+  if (ta) { ta.value = ''; }
+  toast({ type: 'success', title: 'Reviewer assigned', body: reviewer + ' · ' + priority + (due ? ' · due ' + due : '') });
+}
+
+function _aPostEscalation() {
+  const target = (document.getElementById('esc-target') || {}).value || 'Senior stakeholder';
+  const reason = (document.getElementById('esc-reason') || {}).value || '';
+  const ta = document.getElementById('esc-summary');
+  const summary = ta ? ta.value.trim() : '';
+  const text = summary || ('Escalated to ' + target + (reason ? ' — ' + reason : '') + '.');
+  _aAddThreadEntry({ id: 'c' + Date.now(), type: 'escalation', author: 'You', avatar: 'KM', team: 'FP&A',
+    target: target, reason: reason, severity: 'Critical', text: text, time: new Date().toISOString() });
+  _aRefreshThread();
+  if (ta) { ta.value = ''; }
+  toast({ type: 'warn', title: 'Escalated', body: 'Routed to ' + target + (reason ? ' · ' + reason : '') });
+}
+
 /* ---------------------------------------------------------------------------
    (A) UI PRIMITIVES — CONTRACT §9
    --------------------------------------------------------------------------- */
@@ -918,46 +1086,73 @@ function modalCompareScenarios() {
 }
 
 function modalAddComment() {
-  const body = '<div class="form-grid">' +
-    _aFormRow('Comment', _aInput('', 'text', 'Add context or a question…')) +
-    _aFormRow('Severity', _aSelect(['Info', 'Watch', 'Critical'])) +
-    _aFormRow('Notify', _aSelect(['FP&A team', 'Treasury', 'Accounting', 'Procurement', 'CFO'])) +
+  const body =
+    '<div class="section-title">Conversation history</div>' +
+    _aThreadHtml() +
+    '<div class="section-title">Reply</div>' +
+    '<div class="form-row form-row-stack">' +
+      '<label class="form-label">Comment</label>' +
+      _aTextareaId('cmt-text', '', 'Add context, a finding, or a question — the full thread above stays visible.', 5) +
+    '</div>' +
+    '<div class="form-grid">' +
+      _aFormRow('Severity', _aSelectId('cmt-sev', ['Info', 'Watch', 'Critical'])) +
+      _aFormRow('Notify', _aSelectId('cmt-notify', ['FP&A team', 'Treasury', 'Accounting', 'Procurement', 'CFO'])) +
     '</div>';
   modal({
-    title: 'Add Comment',
-    sub: 'Annotate the variance trail',
-    body,
-    footer: _aFooterCancelPrimary('Post comment', 'confirm-add-comment'),
+    title: 'Comments — Variance Investigator',
+    sub: 'Butter press-yield variance · BT-DE-01 · reply with full history',
+    body: body,
+    footer: '<button class="btn btn-ghost" onclick="closeModal()">Close</button>' +
+            '<button class="btn btn-primary" data-action="confirm-add-comment">Post comment</button>',
   });
+  _aScrollThread();
 }
 
 function modalTagReviewer() {
-  const body = '<div class="form-grid">' +
-    _aFormRow('Reviewer', _aSelect(['Sophie Klein (FP&A)', 'Anja Brunner (Accounting)', 'Marc Favre (Treasury)', 'Elena Rossi (Procurement)'])) +
-    _aFormRow('Priority', _aSelect(['Normal', 'High', 'Urgent'])) +
-    _aFormRow('Due date', _aInput('2026-06-20', 'date')) +
+  const body =
+    '<div class="section-title">Conversation history</div>' +
+    _aThreadHtml() +
+    '<div class="section-title">Assign for review</div>' +
+    '<div class="form-grid">' +
+      _aFormRow('Reviewer', _aSelectId('asg-reviewer', ['Sophie Klein (FP&A)', 'Anja Brunner (Accounting)', 'Marc Favre (Treasury)', 'Elena Rossi (Procurement)', 'Operations'])) +
+      _aFormRow('Priority', _aSelectId('asg-priority', ['Normal', 'High', 'Urgent'])) +
+      _aFormRow('Due date', '<input class="form-input" id="asg-due" type="date" value="2026-06-20" />') +
+    '</div>' +
+    '<div class="form-row form-row-stack">' +
+      '<label class="form-label">Note (optional)</label>' +
+      _aTextareaId('asg-note', '', 'What should the reviewer check?', 3) +
     '</div>';
   modal({
-    title: 'Tag Reviewer',
-    sub: 'Assign this item for review',
-    body,
-    footer: _aFooterCancelPrimary('Assign', 'confirm-tag-reviewer'),
+    title: 'Assign Reviewer — Variance Investigator',
+    sub: 'Tag a reviewer and post it to the thread',
+    body: body,
+    footer: '<button class="btn btn-ghost" onclick="closeModal()">Close</button>' +
+            '<button class="btn btn-primary" data-action="confirm-tag-reviewer">Assign &amp; post</button>',
   });
+  _aScrollThread();
 }
 
 function modalEscalate() {
-  const body = '<div class="form-grid">' +
-    _aFormRow('Escalate to', _aSelect(['Group Controller', 'CFO', 'Treasury Head', 'Procurement Director'])) +
-    _aFormRow('Reason', _aSelect(['Effectiveness breach', 'Unpriced exposure', 'NRV write-down', 'Reconciliation gap', 'EUDR risk'])) +
-    _aFormRow('Summary', _aInput('', 'text', 'One-line summary')) +
+  const body =
+    '<div class="section-title">Conversation history</div>' +
+    _aThreadHtml() +
+    '<div class="section-title">Escalate</div>' +
+    '<div class="form-grid">' +
+      _aFormRow('Escalate to', _aSelectId('esc-target', ['Group Controller', 'CFO', 'Treasury Head', 'Procurement Director'])) +
+      _aFormRow('Reason', _aSelectId('esc-reason', ['Effectiveness breach', 'Unpriced exposure', 'NRV write-down', 'Reconciliation gap', 'EUDR risk', 'Conversion-yield variance'])) +
+    '</div>' +
+    '<div class="form-row form-row-stack">' +
+      '<label class="form-label">Summary</label>' +
+      _aTextareaId('esc-summary', '', 'Briefly describe the issue and what you need from the stakeholder…', 4) +
     '</div>';
   modal({
-    title: 'Escalate Issue',
-    sub: 'Route to senior stakeholder',
-    body,
-    footer: '<button class="btn btn-ghost" onclick="closeModal()">Cancel</button>' +
-      '<button class="btn btn-danger" data-action="confirm-escalate">Escalate</button>',
+    title: 'Escalate — Variance Investigator',
+    sub: 'Route to a senior stakeholder and log it to the thread',
+    body: body,
+    footer: '<button class="btn btn-ghost" onclick="closeModal()">Close</button>' +
+            '<button class="btn btn-danger" data-action="confirm-escalate">Escalate &amp; post</button>',
   });
+  _aScrollThread();
 }
 
 function modalSendCommentary() {
@@ -1579,9 +1774,10 @@ const CONFIRM_ACTIONS = {
   'confirm-signoff': () => { closeModal(); toast({ type: 'success', title: 'Close signed off', body: 'June 2026 close signed off.', meta: 'Audit trail recorded' }); },
   'confirm-dds': () => { closeModal(); toast({ type: 'success', title: 'DDS submitted', body: 'Due-diligence statement filed to TRACES.' }); },
   'confirm-save-scenario': () => { closeModal(); toast({ type: 'success', title: 'Scenario saved', body: 'What-if scenario stored.' }); },
-  'confirm-add-comment': () => { closeModal(); toast({ type: 'success', title: 'Comment posted', body: 'Comment added to the trail.' }); },
-  'confirm-tag-reviewer': () => { closeModal(); toast({ type: 'success', title: 'Reviewer tagged', body: 'Item assigned for review.' }); },
-  'confirm-escalate': () => { closeModal(); toast({ type: 'warn', title: 'Escalated', body: 'Issue escalated to senior stakeholder.' }); },
+  // reply / assign / escalate append to the persisted thread and stay open so you watch it grow
+  'confirm-add-comment': () => _aPostComment(),
+  'confirm-tag-reviewer': () => _aPostAssignment(),
+  'confirm-escalate': () => _aPostEscalation(),
   'confirm-send-commentary': () => { closeModal(); toast({ type: 'success', title: 'Sent to CFO', body: 'Executive commentary emailed to the CFO.' }); },
 };
 Object.keys(CONFIRM_ACTIONS).forEach(k => { ACTIONS[k] = CONFIRM_ACTIONS[k]; });

@@ -1764,3 +1764,74 @@ a {
     width: 100%;
   }
 }
+
+/* ===========================================================================
+   Investigation comment thread (reply / assign / escalate history)
+   =========================================================================== */
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 12px 14px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.thread-empty {
+  color: var(--text-2);
+  font-size: 12px;
+  text-align: center;
+  padding: 20px 8px;
+}
+.thread-item { display: flex; gap: 10px; }
+.thread-avatar {
+  width: 30px; height: 30px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--bg-4);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-1);
+}
+.thread-main { flex: 1; min-width: 0; }
+.thread-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.thread-author { font-weight: 600; color: var(--text-0); font-size: 12px; }
+.thread-team {
+  color: var(--text-3);
+  text-transform: uppercase;
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+}
+.thread-tag { color: var(--accent); font-size: 11px; }
+.thread-time {
+  color: var(--text-3);
+  font-family: var(--mono);
+  font-size: 10px;
+  margin-left: auto;
+}
+.thread-body {
+  color: var(--text-1);
+  font-size: 12.5px;
+  line-height: 1.55;
+  margin-top: 3px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* Larger, readable composer + stacked (full-width) form rows */
+.form-textarea {
+  width: 100%;
+  min-height: 92px;
+  resize: vertical;
+  font-family: var(--sans);
+  line-height: 1.5;
+}
+.form-row-stack { display: block; }
+.form-row-stack .form-label { display: block; margin-bottom: 6px; }
